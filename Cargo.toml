@@ -1,0 +1,54 @@
+[package]
+name = "formosa-ml-dsa"
+version = "0.1.0"
+edition = "2021"
+authors = ["Formosa Crypto Team"]
+description = "Rust wrapper for Formosa ML-DSA (Module-Lattice-Based Digital Signature Algorithm) with embedded support"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/formosa-crypto/formosa-mldsa"
+readme = "README.md"
+keywords = ["cryptography", "post-quantum", "ml-dsa", "embedded", "rtic"]
+categories = ["cryptography", "embedded", "no-std"]
+
+[dependencies]
+# Core dependencies for no_std support
+heapless = { version = "0.8", default-features = false }
+
+# Optional dependencies for additional features
+rand_core = { version = "0.6", default-features = false, optional = true }
+zeroize = { version = "1.6", default-features = false, optional = true }
+
+[dev-dependencies]
+hex = "0.4"
+
+[build-dependencies]
+cc = "1.0"
+
+[features]
+default = ["ml-dsa-65", "rand", "zeroize"]
+
+# Parameter set features - select one or more
+ml-dsa-44 = []
+ml-dsa-65 = []
+ml-dsa-87 = []
+
+# Implementation type features
+lowram = []
+avx2 = []
+
+# Target architecture features  
+arm-m4 = []
+x86-64 = []
+
+# Additional features
+rand = ["rand_core"]
+zeroize = ["dep:zeroize"]
+std = []
+
+# RTIC and embedded-specific features
+rtic = []
+fido2 = []
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["thumbv7em-none-eabihf", "x86_64-unknown-linux-gnu"]

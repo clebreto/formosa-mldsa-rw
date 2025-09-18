@@ -1,0 +1,92 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# Generated assembly and object files
+*.s
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Debug symbols
+*.pdb
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.backup
+
+# Test and benchmark results
+/benches/target/
+/tests/target/
+
+# Documentation build
+/doc/
+/docs/book/
+
+# Generated files from build scripts
+/out/
+build.log
+
+# Cargo registry cache
+.cargo/
+
+# Local development configuration
+.env
+.env.local
+
+# Profiling data
+*.prof
+perf.data*
+flamegraph.svg
+
+# Coverage reports
+tarpaulin-report.html
+lcov.info
+coverage/
+
+# Language server cache
+.rust-analyzer/
+
+# Cross-compilation artifacts
+*.elf
+*.bin
+*.hex
+
+# ARM-specific build artifacts
+arm-m4/
+x86-64/
+
+# Jasmin compiler outputs (if generated locally)
+*.jazz
+
+# Submodule build artifacts (keep the submodule itself)
+formosa-mldsa/build/
+formosa-mldsa/target/
+formosa-mldsa/*.s
+formosa-mldsa/*.o
+formosa-mldsa/*.a
+
+# Security keys and certificates (if any)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
