@@ -48,6 +48,11 @@ See the full [Rust API documentation](#rust-api) below for more details.
 
 0. Ensure you have the [Jasmin](https://github.com/jasmin-lang/jasmin) compiler installed,
 using the latest commit on the `main` branch of the project. Also ensure that `jasminc` is in the PATH, since this is what the Makefile invokes.
+   The bundled `formosa-mldsa` sources (commit 912fa3b, 2026-06) need a Jasmin from 2026;
+   a snapshot of Jasmin main is published as the `jasmin` conda package on the `amdt-team`
+   channel (`pixi add -c amdt-team jasmin`). `build.rs` always passes `-system linux` to
+   jasminc (ELF symbol names); extra flags can be given through the `JASMINC_FLAGS`
+   environment variable.
 
 1. To generate assembly code for, say, the AVX2 implementation of ML-DSA-65 on the x86-64 platform, simply run `env ARCHITECTURE=x86-64 PARAMETER_SET=65 IMPLEMENTATION_TYPE=avx2 make`. The resulting assembly implementation will be found in `ml_dsa_65_avx2_x86-64.s`.
 

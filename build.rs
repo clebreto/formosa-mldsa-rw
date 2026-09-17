@@ -112,7 +112,19 @@ fn generate_assembly(param_set: &str, architecture: &str, implementation_type: &
                               param_set, implementation_type, architecture);
     
     let submodule_dir = "formosa-mldsa";
-    
+
+    // Every target this crate builds for is an ELF system. Without `-system linux`
+    // jasminc follows its host default (macOS) and emits `_`-prefixed Mach-O symbol
+    // names, which the ELF link then cannot resolve. Callers may append flags.
+    println!("cargo:rerun-if-env-changed=JASMINC_FLAGS");
+    let mut jasminc_flags = String::from("-system linux");
+    if let Ok(extra) = env::var("JASMINC_FLAGS") {
+        if !extra.trim().is_empty() {
+            jasminc_flags.push(' ');
+            jasminc_flags.push_str(extra.trim());
+        }
+    }
+
     let make_output = Command::new("make")
         .current_dir(submodule_dir)
         .arg(format!("{}.s", output_name))
@@ -120,6 +132,7 @@ fn generate_assembly(param_set: &str, architecture: &str, implementation_type: &
         .env("PARAMETER_SET", param_set)
         .env("IMPLEMENTATION_TYPE", implementation_type)
         .env("JASMINC", jasminc_path.to_str().unwrap())
+        .env("JASMINC_FLAGS", &jasminc_flags)
         .output()
         .expect("Failed to execute make command");
 
