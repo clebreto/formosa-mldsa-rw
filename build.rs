@@ -10,6 +10,9 @@ fn main() {
     let target = env::var("TARGET").unwrap();
     let host = env::var("HOST").unwrap();
     
+    // Armv8-M Mainline (Cortex-M33) runs the Cortex-M4 sources: Jasmin's armv8m target
+    // shares the arm-m4 instructions and only differs in which of them have data
+    // independent timing. `architecture` names the directory of the sources.
     let (architecture, is_cross_compile) = if target.starts_with("thumbv") || target.contains("arm-none-") {
         ("arm-m4", true)
     } else if target.starts_with("x86_64") && !target.contains("apple") {
@@ -67,15 +70,24 @@ fn main() {
     }
     let jasminc_path = jasminc_path.unwrap();
 
+    let (jasmin_arch, assembler_march) = if target.starts_with("thumbv8m.main") {
+        ("armv8m", "armv8-m.main+dsp")
+    } else if architecture == "arm-m4" {
+        ("arm-m4", "armv7-m")
+    } else {
+        (architecture, "")
+    };
+    println!("cargo:info=Jasmin target {} ({} {} sources)", jasmin_arch, architecture, implementation_type);
+
     // Generate assembly files for enabled parameter sets
     let parameter_sets = get_enabled_parameter_sets();
     
     for param_set in parameter_sets {
-        generate_assembly(&param_set, architecture, implementation_type, &out_path, &jasminc_path);
+        generate_assembly(&param_set, architecture, jasmin_arch, implementation_type, &out_path, &jasminc_path);
         
         // For ARM targets, we also need to compile the generated assembly
         if architecture == "arm-m4" {
-            compile_assembly(&param_set, architecture, implementation_type, &out_path);
+            compile_assembly(&param_set, architecture, assembler_march, implementation_type, &out_path);
         }
     }
 
@@ -104,57 +116,52 @@ fn get_enabled_parameter_sets() -> Vec<&'static str> {
     sets
 }
 
-fn generate_assembly(param_set: &str, architecture: &str, implementation_type: &str, out_dir: &Path, jasminc_path: &Path) {
+fn generate_assembly(param_set: &str, architecture: &str, jasmin_arch: &str, implementation_type: &str, out_dir: &Path, jasminc_path: &Path) {
     println!("Generating assembly for ML-DSA-{} on {} with {} implementation", 
-             param_set, architecture, implementation_type);
+             param_set, jasmin_arch, implementation_type);
 
     let output_name = format!("ml_dsa_{}_{}_{}",
                               param_set, implementation_type, architecture);
-    
-    let submodule_dir = "formosa-mldsa";
+
+    // jasminc is called directly rather than through the submodule's Makefile, whose
+    // ARCHITECTURE names both the directory of the sources and jasminc's -arch: the
+    // armv8m target compiles the arm-m4 sources. The assembly goes to OUT_DIR, which
+    // keeps the submodule clean.
+    let submodule_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("formosa-mldsa");
+    let sources = submodule_dir.join(architecture).join(implementation_type);
+    let common = sources.join("common");
+    let entry = sources.join(format!("ml_dsa_{}", param_set)).join("ml_dsa.jazz");
+    let dest = out_dir.join(format!("{}.s", output_name));
 
     // Every target this crate builds for is an ELF system. Without `-system linux`
     // jasminc follows its host default (macOS) and emits `_`-prefixed Mach-O symbol
     // names, which the ELF link then cannot resolve. Callers may append flags.
     println!("cargo:rerun-if-env-changed=JASMINC_FLAGS");
-    let mut jasminc_flags = String::from("-system linux");
+    let mut command = Command::new(jasminc_path);
+    command
+        .env("JASMINPATH", format!("Common={}", common.display()))
+        .arg(format!("-arch={}", jasmin_arch))
+        .args(["-system", "linux"]);
     if let Ok(extra) = env::var("JASMINC_FLAGS") {
-        if !extra.trim().is_empty() {
-            jasminc_flags.push(' ');
-            jasminc_flags.push_str(extra.trim());
-        }
+        command.args(extra.split_whitespace());
     }
-
-    let make_output = Command::new("make")
-        .current_dir(submodule_dir)
-        .arg(format!("{}.s", output_name))
-        .env("ARCHITECTURE", architecture)
-        .env("PARAMETER_SET", param_set)
-        .env("IMPLEMENTATION_TYPE", implementation_type)
-        .env("JASMINC", jasminc_path.to_str().unwrap())
-        .env("JASMINC_FLAGS", &jasminc_flags)
+    let output = command
+        .arg("-o").arg(&dest)
+        .arg(&entry)
         .output()
-        .expect("Failed to execute make command");
+        .unwrap_or_else(|e| panic!("Failed to run {}: {}", jasminc_path.display(), e));
 
-    if !make_output.status.success() {
-        println!("cargo:warning=Make stdout: {}", String::from_utf8_lossy(&make_output.stdout));
-        println!("cargo:warning=Make stderr: {}", String::from_utf8_lossy(&make_output.stderr));
-        panic!("Failed to generate assembly for ML-DSA-{}", param_set);
+    if !output.status.success() {
+        println!("cargo:warning=jasminc stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("cargo:warning=jasminc stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!("Failed to generate assembly for ML-DSA-{} ({})", param_set, jasmin_arch);
     } else {
         println!("cargo:info=Successfully generated assembly for ML-DSA-{}", param_set);
     }
-
-    // Move generated assembly to out directory
-    let source = PathBuf::from(submodule_dir).join(format!("{}.s", output_name));
-    let dest = out_dir.join(format!("{}.s", output_name));
-    
-    std::fs::copy(&source, &dest)
-        .unwrap_or_else(|e| panic!("Failed to copy {} to out dir: {}", source.display(), e));
-        
-    println!("cargo:rerun-if-changed={}", source.display());
+    println!("cargo:rerun-if-changed={}", sources.display());
 }
 
-fn compile_assembly(param_set: &str, architecture: &str, implementation_type: &str, out_dir: &Path) {
+fn compile_assembly(param_set: &str, architecture: &str, march: &str, implementation_type: &str, out_dir: &Path) {
     let output_name = format!("ml_dsa_{}_{}_{}",
                               param_set, implementation_type, architecture);
     
@@ -170,7 +177,7 @@ fn compile_assembly(param_set: &str, architecture: &str, implementation_type: &s
 
     // Use the appropriate assembler for ARM
     let mut cmd = Command::new("arm-none-eabi-as");
-    cmd.arg("-march=armv7-m")
+    cmd.arg(format!("-march={}", march))
        .arg("-mthumb")
        .arg("-o").arg(&obj_file)
        .arg(&asm_file);
@@ -245,6 +252,15 @@ fn link_libraries(architecture: &str, out_dir: &Path) {
 
 /// Helper function to find Jasmin compiler
 fn find_jasmin_compiler() -> Option<PathBuf> {
+    // An explicit compiler first: the armv8m target is not in every jasminc yet
+    println!("cargo:rerun-if-env-changed=JASMINC");
+    if let Ok(jasminc) = env::var("JASMINC") {
+        if !jasminc.trim().is_empty() {
+            println!("cargo:info=Using the Jasmin compiler of JASMINC: {}", jasminc);
+            return Some(PathBuf::from(jasminc));
+        }
+    }
+
     // Try PATH
     if Command::new("jasminc").arg("--version").output().is_ok() {
         println!("cargo:info=Found Jasmin compiler in PATH");

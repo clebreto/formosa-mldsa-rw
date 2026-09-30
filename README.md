@@ -1,6 +1,6 @@
 # Formosa ML-DSA Rust Wrapper
 
-A Rust wrapper for the [Formosa ML-DSA](https://github.com/formosa-crypto/formosa-mldsa) post-quantum digital signature algorithm implementation. This crate provides safe, `no_std`-compatible Rust bindings to high-performance Jasmin-generated assembly implementations of ML-DSA for ARM Cortex-M4 and x86-64 platforms.
+A Rust wrapper for the [Formosa ML-DSA](https://github.com/formosa-crypto/formosa-mldsa) post-quantum digital signature algorithm implementation. This crate provides safe, `no_std`-compatible Rust bindings to high-performance Jasmin-generated assembly implementations of ML-DSA for ARM Cortex-M4, Cortex-M33 and x86-64 platforms.
 
 ## About the Original Implementation
 
@@ -12,7 +12,7 @@ This project wraps the Jasmin implementations of all 3 parameter-sets of the pur
 - **High performance**: Uses Jasmin-generated assembly for optimal performance
 - **Embedded friendly**: `no_std` support with heapless collections for resource-constrained devices
 - **Multiple parameter sets**: ML-DSA-44, ML-DSA-65, and ML-DSA-87 support
-- **Memory efficient**: Low-RAM implementations available for Cortex-M4
+- **Memory efficient**: Low-RAM implementations available for Cortex-M4 and Cortex-M33
 - **RTIC compatible**: Built-in support for Real-Time Interrupt-driven Concurrency
 - **FIDO2 ready**: Specialized utilities for WebAuthn/FIDO2 security key implementations
 - **Safe API**: Memory-safe Rust wrappers around the assembly implementations
@@ -52,7 +52,15 @@ using the latest commit on the `main` branch of the project. Also ensure that `j
    a snapshot of Jasmin main is published as the `jasmin` conda package on the `amdt-team`
    channel (`pixi add -c amdt-team jasmin`). `build.rs` always passes `-system linux` to
    jasminc (ELF symbol names); extra flags can be given through the `JASMINC_FLAGS`
-   environment variable.
+   environment variable, and `JASMINC` names the compiler to use instead of the one on
+   the PATH.
+
+   **Cortex-M33** (`thumbv8m.main-*` targets): the Cortex-M4 sources are compiled with
+   `jasminc -arch armv8m` and assembled for `armv8-m.main+dsp`. Jasmin's armv8m target is
+   not in a release yet; point `JASMINC` at a compiler built from the branch that has it.
+   The reference implementation needs 52 KB (ML-DSA-44) to 80 KB (ML-DSA-65) of stack to
+   sign; the `lowram` feature brings that down to 6 to 8 KB. `testfw/` checks both on an
+   LPC55S69 against the `fips204` crate and measures them.
 
 1. To generate assembly code for, say, the AVX2 implementation of ML-DSA-65 on the x86-64 platform, simply run `env ARCHITECTURE=x86-64 PARAMETER_SET=65 IMPLEMENTATION_TYPE=avx2 make`. The resulting assembly implementation will be found in `ml_dsa_65_avx2_x86-64.s`.
 
