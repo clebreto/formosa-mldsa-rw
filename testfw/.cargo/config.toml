@@ -1,0 +1,18 @@
+[target.thumbv8m.main-none-eabihf]
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tdefmt.x",
+  "-C", "link-arg=--nmagic",
+]
+
+[build]
+target = "thumbv8m.main-none-eabihf" # Cortex-M33 with FPU
+
+[env]
+# defmt filters at compile time, and its default drops info!: without this the run is
+# silent and looks like a firmware that never started.
+DEFMT_LOG = "info"
+# The default 1 KB ring overflows while a signature runs: the emulator drains it on a
+# timer, and nothing here waits for it. Losing the measurements to a wrapped buffer is
+# worse than spending a few KB of RAM.
+DEFMT_RTT_BUFFER_SIZE = "16384"

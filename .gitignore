@@ -1,5 +1,6 @@
 # Rust build artifacts
 /target/
+/testfw/target*/
 Cargo.lock
 
 # Generated assembly and object files
@@ -47,6 +48,7 @@ build.log
 
 # Cargo registry cache
 .cargo/
+!/testfw/.cargo/
 
 # Local development configuration
 .env

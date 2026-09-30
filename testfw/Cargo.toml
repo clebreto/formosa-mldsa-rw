@@ -1,0 +1,25 @@
+# Runs the crate on a Cortex-M33 (the LPC55S69-EVK, emulated or real) and checks what it
+# computes against an independent FIPS 204 implementation. See testfw/README.md.
+[workspace]
+
+[package]
+name = "formosa-ml-dsa-testfw"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7.3"
+defmt = { version = "0.3", features = ["encoding-rzcobs"] }
+defmt-rtt = "0.4"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+formosa-ml-dsa = { path = "..", default-features = false, features = ["ml-dsa-44", "ml-dsa-65"] }
+
+[features]
+# The low-RAM variant of the Jasmin sources instead of the reference one
+lowram = ["formosa-ml-dsa/lowram"]
+
+[profile.dev]
+opt-level = 1
+debug = 2
