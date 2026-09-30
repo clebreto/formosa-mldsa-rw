@@ -138,6 +138,28 @@ fn main() -> ! {
 }
 ```
 
+### In-place functions
+
+On a microcontroller, prefer the in-place functions of the `MlDsa` trait: they write into
+buffers the caller owns, at their FIPS 204 sizes, and cost no more stack than the Jasmin
+code itself. The by-value API above returns keys and signatures in 8 KB buffers and copies
+them, which on a Cortex-M33 adds some 60 KB of stack (see `testfw/README.md`).
+
+```rust
+use formosa_ml_dsa::{MlDsa, MlDsa44, MlDsaParams};
+
+let mut verification_key = [0u8; MlDsa44::VERIFICATION_KEY_SIZE];
+let mut signing_key = [0u8; MlDsa44::SIGNING_KEY_SIZE];
+let mut signature = [0u8; MlDsa44::SIGNATURE_SIZE];
+
+MlDsa44::keygen_into(&seed, &mut verification_key, &mut signing_key)?;
+MlDsa44::sign_into(&signing_key, message, &[], &randomness, &mut signature)?;
+MlDsa44::verify_bytes(&verification_key, &signature, message, &[])?;
+```
+
+Wrong buffer lengths give `Error::InvalidLength`, a context over 255 bytes
+`Error::InvalidContextLength`. The caller wipes its signing key buffer.
+
 ### RTIC Integration
 
 ```rust

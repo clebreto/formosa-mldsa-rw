@@ -113,7 +113,39 @@ pub trait MlDsaParams {
 }
 
 /// Common ML-DSA operations trait
+///
+/// Two ways in: `keygen_into`, `sign_into` and `verify_bytes` work on byte slices the
+/// caller owns, and cost no more stack than the Jasmin code itself; the other methods
+/// return keys and signatures by value, in fixed-capacity buffers of up to 8 KB each, which
+/// on a microcontroller can add tens of kilobytes of stack.
 pub trait MlDsa: MlDsaParams {
+    /// ML-DSA.KeyGen_internal from `seed`, into `verification_key`
+    /// (`VERIFICATION_KEY_SIZE` bytes) and `signing_key` (`SIGNING_KEY_SIZE` bytes).
+    fn keygen_into(
+        seed: &[u8; 32],
+        verification_key: &mut [u8],
+        signing_key: &mut [u8],
+    ) -> Result<()>;
+
+    /// Pure ML-DSA signature of `message` with `context` (at most 255 bytes), hedged with
+    /// `randomness` (all zeros: the deterministic variant), into `signature`
+    /// (`SIGNATURE_SIZE` bytes). `signing_key` is the expanded key (`SIGNING_KEY_SIZE`).
+    fn sign_into(
+        signing_key: &[u8],
+        message: &[u8],
+        context: &[u8],
+        randomness: &[u8; 32],
+        signature: &mut [u8],
+    ) -> Result<()>;
+
+    /// Pure ML-DSA verification of `signature` over `message` with `context`.
+    fn verify_bytes(
+        verification_key: &[u8],
+        signature: &[u8],
+        message: &[u8],
+        context: &[u8],
+    ) -> Result<()>;
+
     /// Generate a new keypair using the provided randomness
     fn generate_keypair_with_seed(
         seed: &[u8; 32]

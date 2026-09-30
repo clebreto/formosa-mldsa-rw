@@ -16,44 +16,37 @@ impl MlDsaParams for MlDsa65 {
 }
 
 impl MlDsa for MlDsa65 {
-    fn generate_keypair_with_seed(
-        seed: &[u8; 32]
-    ) -> Result<(SigningKey<Self>, VerifyingKey<Self>)> {
-        let mut verification_key = [0u8; Self::VERIFICATION_KEY_SIZE];
-        let mut signing_key = [0u8; Self::SIGNING_KEY_SIZE];
-
-        unsafe {
-            ml_dsa_65_keygen(
-                verification_key.as_mut_ptr(),
-                signing_key.as_mut_ptr(),
-                seed.as_ptr(),
-            );
+    fn keygen_into(
+        seed: &[u8; 32],
+        verification_key: &mut [u8],
+        signing_key: &mut [u8],
+    ) -> Result<()> {
+        if verification_key.len() != Self::VERIFICATION_KEY_SIZE
+            || signing_key.len() != Self::SIGNING_KEY_SIZE
+        {
+            return Err(Error::InvalidLength);
         }
-
-        Ok((
-            SigningKey::from_array_unchecked(&signing_key),
-            VerifyingKey::from_array_unchecked(&verification_key),
-        ))
+        unsafe {
+            ml_dsa_65_keygen(verification_key.as_mut_ptr(), signing_key.as_mut_ptr(), seed.as_ptr());
+        }
+        Ok(())
     }
 
-    fn sign_with_seed(
-        signing_key: &SigningKey<Self>,
+    fn sign_into(
+        signing_key: &[u8],
         message: &[u8],
         context: &[u8],
         randomness: &[u8; 32],
-    ) -> Result<Signature<Self>> {
+        signature: &mut [u8],
+    ) -> Result<()> {
         if context.len() > 255 {
             return Err(Error::InvalidContextLength);
         }
+        if signing_key.len() != Self::SIGNING_KEY_SIZE || signature.len() != Self::SIGNATURE_SIZE {
+            return Err(Error::InvalidLength);
+        }
 
-        let mut signature = [0u8; Self::SIGNATURE_SIZE];
-
-        // Prepare context_message_randomness array for C function
-        let context_ptr = context.as_ptr();
-        let message_ptr = message.as_ptr();
-        let randomness_ptr = randomness.as_ptr();
-
-        let context_message_randomness = [context_ptr, message_ptr, randomness_ptr];
+        let context_message_randomness = [context.as_ptr(), message.as_ptr(), randomness.as_ptr()];
         let contextlen_messagelen = [context.len(), message.len()];
 
         let result = unsafe {
@@ -61,40 +54,41 @@ impl MlDsa for MlDsa65 {
                 signature.as_mut_ptr(),
                 context_message_randomness.as_ptr(),
                 contextlen_messagelen.as_ptr(),
-                signing_key.as_slice().as_ptr(),
+                signing_key.as_ptr(),
             )
         };
 
         if result == 0 {
-            Ok(Signature::from_array_unchecked(&signature))
+            Ok(())
         } else {
             Err(Error::CryptoError)
         }
     }
 
-    fn verify(
-        verifying_key: &VerifyingKey<Self>,
-        signature: &Signature<Self>,
+    fn verify_bytes(
+        verification_key: &[u8],
+        signature: &[u8],
         message: &[u8],
         context: &[u8],
     ) -> Result<()> {
         if context.len() > 255 {
             return Err(Error::InvalidContextLength);
         }
+        if verification_key.len() != Self::VERIFICATION_KEY_SIZE
+            || signature.len() != Self::SIGNATURE_SIZE
+        {
+            return Err(Error::InvalidLength);
+        }
 
-        // Prepare context_message array for C function
-        let context_ptr = context.as_ptr();
-        let message_ptr = message.as_ptr();
-
-        let context_message = [context_ptr, message_ptr];
+        let context_message = [context.as_ptr(), message.as_ptr()];
         let contextlen_messagelen = [context.len(), message.len()];
 
         let result = unsafe {
             ml_dsa_65_verify(
-                signature.as_slice().as_ptr(),
+                signature.as_ptr(),
                 context_message.as_ptr(),
                 contextlen_messagelen.as_ptr(),
-                verifying_key.as_slice().as_ptr(),
+                verification_key.as_ptr(),
             )
         };
 
@@ -103,6 +97,42 @@ impl MlDsa for MlDsa65 {
         } else {
             Err(Error::InvalidSignature)
         }
+    }
+
+    fn generate_keypair_with_seed(
+        seed: &[u8; 32]
+    ) -> Result<(SigningKey<Self>, VerifyingKey<Self>)> {
+        let mut verification_key = [0u8; Self::VERIFICATION_KEY_SIZE];
+        let mut signing_key = [0u8; Self::SIGNING_KEY_SIZE];
+        Self::keygen_into(seed, &mut verification_key, &mut signing_key)?;
+
+        let keys = (
+            SigningKey::from_array_unchecked(&signing_key),
+            VerifyingKey::from_array_unchecked(&verification_key),
+        );
+        #[cfg(feature = "zeroize")]
+        zeroize::Zeroize::zeroize(&mut signing_key);
+        Ok(keys)
+    }
+
+    fn sign_with_seed(
+        signing_key: &SigningKey<Self>,
+        message: &[u8],
+        context: &[u8],
+        randomness: &[u8; 32],
+    ) -> Result<Signature<Self>> {
+        let mut signature = [0u8; Self::SIGNATURE_SIZE];
+        Self::sign_into(signing_key.as_slice(), message, context, randomness, &mut signature)?;
+        Ok(Signature::from_array_unchecked(&signature))
+    }
+
+    fn verify(
+        verifying_key: &VerifyingKey<Self>,
+        signature: &Signature<Self>,
+        message: &[u8],
+        context: &[u8],
+    ) -> Result<()> {
+        Self::verify_bytes(verifying_key.as_slice(), signature.as_slice(), message, context)
     }
 }
 
